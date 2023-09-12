@@ -1,0 +1,3 @@
+Add this line to crontab to autostart on reboot:
+
+@reboot /home/pi/air_pm/run_on_boot.sh &
