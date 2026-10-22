@@ -1,6 +1,7 @@
 # Air Data Log program by Mark Shackelford - Testing new ideas - 2023-07-30
 # Testing long form data collection technique
 # Testing threading and use of control file to gracefully stop.
+# 2026-10-22: uploads moved to uploader.py (sends upload token, retries failed batches).
 
 import board
 import busio
@@ -9,9 +10,9 @@ from adafruit_bme280 import basic as adafruit_bme280
 from datetime import datetime
 import logging
 import threading
-import json
-import requests
 import os
+
+from uploader import Uploader, read_token
 
 # Define a global flag to signal the program to stop sampling
 stop_sampling_flag = threading.Event()
@@ -23,11 +24,10 @@ reset_pin = None
 i2c = busio.I2C(board.SCL, board.SDA, frequency=100000)
 pm25 = PM25_I2C(i2c, reset_pin)
 bme280 = adafruit_bme280.Adafruit_BME280_I2C(i2c)
-airdata_list = []
+uploader = Uploader(token=read_token())
 
 def sample_sensor_data():
     # code to sample and add new sensor data
-    global airdata_list
     while True:
         try:
             aqdata = pm25.read()
@@ -43,29 +43,12 @@ def sample_sensor_data():
     measurements = ['count_03um', 'count_05um', 'temp_c', 'humidity', 'pressure']
     values = [aqdata['particles 03um'], aqdata['particles 05um'], temp_c, humidity, pressure] 
     
-    # Loop through the data and create dictionaries and add to list
+    uploader.add([{"Timestamp": timestamp, "Measurement": m, "Value": v}
+                  for m, v in zip(measurements, values)])
 
-    for i in range(len(measurements)):
-        data_dict = {
-            "Timestamp": timestamp,
-            "Measurement": measurements[i],
-            "Value": values[i]
-        }
-        airdata_list.append(data_dict)
-
-    if len(airdata_list) >= 60:
-        # update db and empty airdata_list
-        jdata = json.dumps({'mydata': airdata_list})
-        newHeaders = {'Content-type': 'application/json', 'Accept': 'text/plain'}
-        try:
-            response = requests.post('https://shack.pythonanywhere.com/airdata',
-                        data=jdata,
-                        headers=newHeaders, timeout=5)
-            response.raise_for_status()  # Raise an exception for non-2xx status
-        except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
-            logging.warning(f" An error occurred: {e}")
-                
-        airdata_list = []
+    # Upload every 3 minutes. Failed uploads stay pending and are retried.
+    if uploader.due():
+        uploader.send()
 
     # Check the stop_sampling_flag to see if the program should stop
     if not stop_sampling_flag.is_set():
