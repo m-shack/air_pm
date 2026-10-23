@@ -1,6 +1,6 @@
 # Upload readings to the Shack Air website, keeping any that fail so they are retried.
 # Added 2026-10-22. Kept free of sensor/hardware imports so it can be tested on the Mac.
-# Must stay compatible with the Pi's Python 3.7.
+# The Pi runs Python 3.13 (Raspberry Pi OS trixie, rebuilt 2026-10-23).
 #
 # The upload token is read from a file that is NOT in git (this repo is public):
 #   /home/pi/.airdata_token   (one line: the same token as ~/.airdata_token on PythonAnywhere)

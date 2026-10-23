@@ -1,8 +1,6 @@
 # Tests for uploader.py with a fake website (no network or Pi hardware needed). Run with: pytest
-import ast
 import json
 import logging
-from pathlib import Path
 
 import requests
 
@@ -130,8 +128,3 @@ def test_read_token(tmp_path):
     f.write_text("abc123\n")
     assert read_token(str(f)) == "abc123"
     assert read_token(str(tmp_path / "missing")) is None
-
-
-def test_pi_code_is_python37_compatible():
-    for name in ("uploader.py", "datalog_pa3.py"):
-        ast.parse(Path(name).read_text(), feature_version=(3, 7))
