@@ -2,6 +2,8 @@
 # Testing long form data collection technique
 # Testing threading and use of control file to gracefully stop.
 # 2026-10-22: uploads moved to uploader.py (sends upload token, retries failed batches).
+# 2026-10-24: also upload PM2.5 and PM10 mass (ug/m3, the sensor's "env" readings) to compare
+#             with outdoor air quality data.
 
 import board
 import busio
@@ -40,8 +42,9 @@ def sample_sensor_data():
             continue
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    measurements = ['count_03um', 'count_05um', 'temp_c', 'humidity', 'pressure']
-    values = [aqdata['particles 03um'], aqdata['particles 05um'], temp_c, humidity, pressure] 
+    measurements = ['count_03um', 'count_05um', 'temp_c', 'humidity', 'pressure', 'pm25_env', 'pm10_env']
+    values = [aqdata['particles 03um'], aqdata['particles 05um'], temp_c, humidity, pressure,
+              aqdata['pm25 env'], aqdata['pm100 env']]  # 'pm100' is the library's name for PM10
     
     uploader.add([{"Timestamp": timestamp, "Measurement": m, "Value": v}
                   for m, v in zip(measurements, values)])

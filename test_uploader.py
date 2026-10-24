@@ -36,8 +36,8 @@ class FakeSite:
 
 
 def sample(i):
-    """One 15-second sample: 5 rows."""
-    return [{"Timestamp": f"t{i}", "Measurement": m, "Value": i} for m in ("a", "b", "c", "d", "e")]
+    """One 15-second sample: 7 rows, like datalog_pa3.py sends."""
+    return [{"Timestamp": f"t{i}", "Measurement": m, "Value": i} for m in ("a", "b", "c", "d", "e", "f", "g")]
 
 
 def run(up, site, samples, start=0):
@@ -51,7 +51,7 @@ def test_uploads_every_12_samples():
     site = FakeSite()
     up = Uploader(token="secret", session=site)
     run(up, site, 24)
-    assert len(site.headers) == 2 and len(site.received) == 120 and up.pending == []
+    assert len(site.headers) == 2 and len(site.received) == 168 and up.pending == []
     assert site.headers[0]["X-Upload-Token"] == "secret"
 
 
@@ -68,13 +68,13 @@ def test_outage_keeps_data_retries_every_3_minutes_then_catches_up():
     site.mode = "down"
     run(up, site, 240)                      # one hour down
     assert len(site.headers) == 20          # one attempt per 3 minutes, not every 15 s
-    assert len(up.pending) == 1200 and site.received == []
+    assert len(up.pending) == 1680 and site.received == []
     site.mode = "up"
     run(up, site, 24, start=240)
     # Everything was delivered in order; only the newest few rows wait for the next upload.
     sent_and_waiting = [r["Timestamp"] for r in site.received + up.pending]
-    assert sent_and_waiting == [f"t{i}" for i in range(264) for _ in range(5)]
-    assert len(up.pending) < 60
+    assert sent_and_waiting == [f"t{i}" for i in range(264) for _ in range(7)]
+    assert len(up.pending) < 84
 
 
 def test_large_backlog_sent_in_chunks():
@@ -89,8 +89,8 @@ def test_large_backlog_sent_in_chunks():
     run(up, site, 4, start=731)                     # retry, then quick chunks every 15 s
     assert len(site.headers) - attempts_before == 4
     assert all(set(r) == {"Timestamp", "Measurement", "Value"} for r in site.received)
-    assert len(site.received) == 3600 + 15 * 5 - len(up.pending)
-    assert len(up.pending) < 60
+    assert len(site.received) == 5040 + 15 * 7 - len(up.pending)
+    assert len(up.pending) < 84
 
 
 def test_timeout_is_retried_too():
@@ -98,10 +98,10 @@ def test_timeout_is_retried_too():
     up = Uploader(session=site)
     site.mode = "timeout"
     run(up, site, 12)
-    assert len(up.pending) == 60
+    assert len(up.pending) == 84
     site.mode = "up"
     run(up, site, 12, start=12)
-    assert len(site.received) == 120
+    assert len(site.received) == 168
 
 
 def test_backlog_is_capped(caplog):

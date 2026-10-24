@@ -12,9 +12,9 @@ import requests
 
 UPLOAD_URL = "https://shack.pythonanywhere.com/airdata"
 TOKEN_FILE = "/home/pi/.airdata_token"
-ROWS_PER_UPLOAD = 60        # normal upload every 3 minutes (5 measurements x 12 samples)
-MAX_ROWS_PER_POST = 1200    # one hour of readings (5 measurements x 240 samples)
-MAX_PENDING_ROWS = 28800    # one day; beyond this the oldest readings are dropped
+SAMPLES_PER_UPLOAD = 12     # normal upload every 3 minutes (12 samples, 15 s apart)
+MAX_ROWS_PER_POST = 1680    # one hour of readings (7 measurements x 240 samples)
+MAX_PENDING_ROWS = 40320    # one day; beyond this the oldest readings are dropped
 
 
 def read_token(path=TOKEN_FILE):
@@ -34,6 +34,7 @@ class Uploader:
         self.session = session
         self.pending = []
         self.new_rows = 0       # rows added since the last upload attempt
+        self.new_samples = 0    # add() calls (one per 15-second sample) since then
         self.last_ok = True
         self.headers = {"Content-type": "application/json", "Accept": "text/plain"}
         if token:
@@ -42,6 +43,7 @@ class Uploader:
     def add(self, rows):
         self.pending.extend(rows)
         self.new_rows += len(rows)
+        self.new_samples += 1
         overflow = len(self.pending) - MAX_PENDING_ROWS
         if overflow > 0:
             del self.pending[:overflow]
@@ -50,11 +52,12 @@ class Uploader:
     def due(self):
         """Every 3 minutes normally; while the website is down, retry only every 3 minutes;
         right after it comes back, keep sending until the backlog is cleared."""
-        return self.new_rows >= ROWS_PER_UPLOAD or (self.last_ok and len(self.pending) > ROWS_PER_UPLOAD)
+        backlog = len(self.pending) > self.new_rows    # older readings than the latest few are waiting
+        return self.new_samples >= SAMPLES_PER_UPLOAD or (self.last_ok and backlog)
 
     def send(self):
         """Upload the oldest pending readings. Returns True if the website accepted them."""
-        self.new_rows = 0
+        self.new_rows = self.new_samples = 0
         batch = self.pending[:MAX_ROWS_PER_POST]
         try:
             response = self.session.post(self.url, data=json.dumps({"mydata": batch}),
